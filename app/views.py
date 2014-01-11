@@ -16,7 +16,16 @@ def before_request():
         g.user.last_seen = datetime.utcnow()
         db.session.add(g.user)
         db.session.commit()
-    
+
+@app.errorhandler(404)
+def internal_error(error):
+    return render_template('404.html'), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return render_template('500.html'), 500
+
 @app.route('/')
 @app.route('/index')
 @login_required
@@ -24,12 +33,12 @@ def index():
     user = g.user
     posts = [
         { 
-            'author': { 'nickname': 'Arsalan' }, 
-            'body': 'How are you?' 
+            'author': { 'nickname': 'John' }, 
+            'body': 'Beautiful day in Portland!' 
         },
         { 
-            'author': { 'nickname': 'Akruti' }, 
-            'body': 'I am fine. you?' 
+            'author': { 'nickname': 'Susan' }, 
+            'body': 'The Avengers movie was so cool!' 
         }
     ]
     return render_template('index.html',
@@ -61,6 +70,7 @@ def after_login(resp):
         nickname = resp.nickname
         if nickname is None or nickname == "":
             nickname = resp.email.split('@')[0]
+        nickname = User.make_unique_nickname(nickname)
         user = User(nickname = nickname, email = resp.email, role = ROLE_USER)
         db.session.add(user)
         db.session.commit()
@@ -75,8 +85,7 @@ def after_login(resp):
 def logout():
     logout_user()
     return redirect(url_for('index'))
-
-
+    
 @app.route('/user/<nickname>')
 @login_required
 def user(nickname):
@@ -85,35 +94,27 @@ def user(nickname):
         flash('User ' + nickname + ' not found.')
         return redirect(url_for('index'))
     posts = [
-        { 'author': user, 'body':'Hello World!'},
-        { 'author': user, 'body':'Ugh. Hello, again. This is awkward.'}
+        { 'author': user, 'body': 'Test post #1' },
+        { 'author': user, 'body': 'Test post #2' }
     ]
     return render_template('user.html',
         user = user,
         posts = posts)
 
-
 @app.route('/edit', methods = ['GET', 'POST'])
 @login_required
 def edit():
-    form = EditForm()
+    form = EditForm(g.user.nickname)
     if form.validate_on_submit():
         g.user.nickname = form.nickname.data
         g.user.about_me = form.about_me.data
         db.session.add(g.user)
         db.session.commit()
-
         flash('Your changes have been saved.')
         return redirect(url_for('edit'))
-    else:
+    elif request.method != "POST":
         form.nickname.data = g.user.nickname
         form.about_me.data = g.user.about_me
-    return render_template('edit.html', 
+    return render_template('edit.html',
         form = form)
-
-
-
-
-
-
-
+    
